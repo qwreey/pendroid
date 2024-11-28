@@ -1,24 +1,16 @@
 use std::str::Split;
 
+use super::ActionType;
+
 pub struct PenData {
     pub x: i32,
     pub y: i32,
     pub tilt_x: i32,
     pub tilt_y: i32,
-    pub tps: i32,
+    pub tps: u32,
     pub pressure: i32,
     pub down: bool,
     pub hover: bool,
-}
-
-pub struct ScreenData {
-    pub width: u32,
-    pub height: u32,
-}
-
-pub enum ActionType {
-    Pen(PenData),
-    ScreenUpdate(ScreenData),
 }
 
 pub fn pen_parse(down: bool, hover: bool, split: &mut Split<&str>) -> Result<ActionType, String> {
@@ -30,7 +22,7 @@ pub fn pen_parse(down: bool, hover: bool, split: &mut Split<&str>) -> Result<Act
     let tps = split
         .next()
         .ok_or_else(|| String::from("field 1 tps required"))?
-        .parse::<i32>()
+        .parse::<u32>()
         .map_err(|_| String::from("field 1 tps parse failed"))?;
     let x = split
         .next()
@@ -65,35 +57,4 @@ pub fn pen_parse(down: bool, hover: bool, split: &mut Split<&str>) -> Result<Act
     };
 
     Ok(ActionType::Pen(pen_data))
-}
-
-fn screen_parse(split: &mut Split<&str>) -> Result<ActionType, String> {
-    let width = split
-        .next()
-        .ok_or_else(|| String::from("field 0 width required"))?
-        .parse::<u32>()
-        .map_err(|_| String::from("field 0 width parse failed"))?;
-    let height = split
-        .next()
-        .ok_or_else(|| String::from("field 1 height required"))?
-        .parse::<u32>()
-        .map_err(|_| String::from("field 1 height parse failed"))?;
-
-    Ok(ActionType::ScreenUpdate(ScreenData { width, height }))
-}
-
-pub fn action_parse(action: String) -> Result<ActionType, String> {
-    let Some(head) = action.chars().next() else {
-        return Err(String::from("Unexpected header"));
-    };
-
-    let mut split = action.as_str()[1..].split(";");
-
-    match head {
-        'D' => pen_parse(true, true, &mut split),
-        'U' => pen_parse(false, true, &mut split),
-        'O' => pen_parse(false, false, &mut split),
-        'S' => screen_parse(&mut split),
-        _ => Err(String::from("Unexpected header")),
-    }
 }

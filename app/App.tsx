@@ -5,12 +5,15 @@ import React, {useCallback, useEffect} from 'react';
 import {GestureHandlerRootView} from 'react-native-gesture-handler';
 import useWebSocket, {ReadyState} from 'react-native-use-websocket';
 
-import {PenData, PenHandle} from './Pen';
-import {useTPS, useScreen} from './libs';
+import {type PenData} from './PenData';
+import {GestureHandle} from './GestureHandle';
+import {useTPS, useScreen, useStorage, StorageProvider} from './libs';
+import {TouchData} from './TouchData';
 
 export default function App() {
   const tps = useTPS();
   const screen = useScreen();
+  useStorage;
 
   // Open ws
   const {sendMessage, lastMessage, readyState} = useWebSocket(
@@ -36,12 +39,22 @@ export default function App() {
     [readyState],
   );
 
+  // Send pen input
+  const onTouchChange = useCallback(
+    (touch: TouchData) => {
+      if (readyState == ReadyState.OPEN) {
+        sendMessage(`T${touch.pos.join(';')}`);
+      }
+    },
+    [readyState],
+  );
+
   // Send screen update
   useEffect(() => {
     console.log('try');
     if (readyState == ReadyState.OPEN) {
       console.log('open');
-      sendMessage(`S${screen.width};${screen.height}`);
+      sendMessage(`V${screen.width};${screen.height}`);
     }
   }, [readyState]);
 
@@ -51,10 +64,17 @@ export default function App() {
   }, []);
 
   return (
-    <GestureHandlerRootView onLayout={screen.bindLayout}>
-      <StatusBar hidden={true} />
-      <KeepAwake />
-      <PenHandle onChange={onPenChange} tps={tps} screen={screen} />
-    </GestureHandlerRootView>
+    <StorageProvider>
+      <GestureHandlerRootView onLayout={screen.bindLayout}>
+        <StatusBar hidden={true} />
+        <KeepAwake />
+        <GestureHandle
+          onTouchChange={onTouchChange}
+          onPenChage={onPenChange}
+          tps={tps}
+          screen={screen}
+        />
+      </GestureHandlerRootView>
+    </StorageProvider>
   );
 }

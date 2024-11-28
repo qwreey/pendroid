@@ -8,6 +8,7 @@ export interface Screen {
   windowHeight: number;
   scale: number;
   bindLayout: (event: LayoutChangeEvent) => void;
+  applyScale: (num: number) => number;
 }
 
 export function useScreen(): Screen {
@@ -16,6 +17,9 @@ export function useScreen(): Screen {
       const {width, height} = event.nativeEvent.layout;
       screen.height = Math.floor(height * screen.scale);
       screen.width = Math.floor(width * screen.scale);
+    },
+    applyScale: (num: number) => {
+      return Math.round(num * screen.scale);
     },
   } as Screen).current;
 

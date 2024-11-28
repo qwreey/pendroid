@@ -2,26 +2,18 @@ use std::{cell::RefCell, rc::Rc};
 
 use ws::{Error as WsError, Factory, Handler, Message, Sender, WebSocket};
 
+mod backend;
 mod parse;
-mod udev_backend;
 mod utility;
 
-use parse::{action_parse, ActionType};
-use udev_backend::PenBackend;
+use backend::InputBackend;
 use utility::ErrToString;
 
-// use std::thread;
-// use std::time::Duration;
-// use uinput::event::absolute::Absolute::Position;
-// use uinput::event::absolute::Position::{X, Y};
-// use uinput::event::controller::Controller::Mouse;
-// use uinput::event::controller::Mouse::Left;
-// use uinput::event::Event::{Absolute, Controller};
-
-struct PenWsHandle {
-    backend: Rc<RefCell<PenBackend>>,
+// Connection
+struct PenWsConnection {
+    backend: Rc<RefCell<InputBackend>>,
 }
-impl Handler for PenWsHandle {
+impl Handler for PenWsConnection {
     fn on_message(&mut self, msg: Message) -> Result<(), WsError> {
         // Ok(self.backend)
         let Message::Text(text) = msg else {
@@ -35,22 +27,22 @@ impl Handler for PenWsHandle {
     }
 }
 
-struct PenWs {
-    backend: Rc<RefCell<PenBackend>>,
+struct PenWsFactory {
+    backend: Rc<RefCell<InputBackend>>,
 }
-impl Factory for PenWs {
-    type Handler = PenWsHandle;
+impl Factory for PenWsFactory {
+    type Handler = PenWsConnection;
 
     fn connection_made(&mut self, _: Sender) -> Self::Handler {
-        PenWsHandle {
+        PenWsConnection {
             backend: self.backend.clone(),
         }
     }
 }
 
 fn main() -> Result<(), String> {
-    let ws = WebSocket::new(PenWs {
-        backend: Rc::new(RefCell::new(PenBackend::new()?)),
+    let ws = WebSocket::new(PenWsFactory {
+        backend: Rc::new(RefCell::new(InputBackend::new()?)),
     })
     .err_tostring()?;
     ws.listen("localhost:57362").err_tostring()?;
