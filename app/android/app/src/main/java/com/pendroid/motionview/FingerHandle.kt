@@ -1,9 +1,11 @@
 package com.pendroid.motionview
 
+import android.util.Log
 import android.view.MotionEvent
 import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.WritableArray
 import com.facebook.react.bridge.WritableMap
+import kotlin.math.absoluteValue
 
 class FingerHandle(val callback: Runnable) {
     class TrackingIdHandle(val len: Int) {
@@ -25,8 +27,10 @@ class FingerHandle(val callback: Runnable) {
             }
             return trackingId
         }
-        fun clearSlot(slot: Int) {
+        fun clearSlot(slot: Int): Boolean {
+            val result = trackingIdList[slot] != -1
             trackingIdList[slot] = -1
+            return result
         }
         fun length(): Int {
              return len - trackingIdList.count { it == -1 }
@@ -64,21 +68,36 @@ class FingerHandle(val callback: Runnable) {
     private val trackingIds = TrackingIdHandle(TOUCH_MAX)
     private var touchList: Array<Touch?> = arrayOfNulls(TOUCH_MAX)
     private var len: Int = 0
+    private var downTime: Long = -1;
 
     fun touchEvent(ev: MotionEvent) {
         len = 0
+        if (downTime < 0 && -downTime == ev.downTime) {
+            return
+        } else if (downTime != ev.downTime) {
+            downTime = ev.downTime
+        }
         for (index in 0..<ev.pointerCount) {
             val slot = ev.getPointerId(index)
             if (slot >= TOUCH_MAX) continue
 
-            touchList[len++] = if (isDown(ev, index)) {
-                Touch(ev.getX(index).toInt(), ev.getY(index).toInt(), slot, trackingIds.slotTrackingId(slot))
-            } else {
-                trackingIds.clearSlot(slot)
-                Touch.uninit(slot)
+            if (isDown(ev, index)) {
+                touchList[len++] = Touch(ev.getX(index).toInt(), ev.getY(index).toInt(), slot, trackingIds.slotTrackingId(slot))
+            } else if (trackingIds.clearSlot(slot)) {
+                touchList[len++] = Touch.uninit(slot)
             }
         }
-        callback.run()
+        if (len != 0) callback.run()
+    }
+
+    fun reset() {
+        len = 0
+        if (trackingIds.length() == 0) return
+        for (slot in 0..<TOUCH_MAX) {
+            if (trackingIds.clearSlot(slot)) touchList[len++] = Touch.uninit(slot)
+        }
+        downTime = -(downTime.absoluteValue)
+        if (len != 0) callback.run()
     }
 
     fun getArray(): WritableArray {

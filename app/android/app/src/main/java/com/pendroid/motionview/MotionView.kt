@@ -38,7 +38,10 @@ class MotionView(context: Context) : ReactViewGroup(context) {
 
         when (ev.getToolType(0)) {
             MotionEvent.TOOL_TYPE_FINGER -> fingerHandle.touchEvent(ev)
-            MotionEvent.TOOL_TYPE_STYLUS -> stylusHandle.touchEvent(ev)
+            MotionEvent.TOOL_TYPE_STYLUS -> {
+                fingerHandle.reset()
+                stylusHandle.touchEvent(ev)
+            }
         }
 
         return true
