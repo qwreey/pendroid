@@ -11,15 +11,14 @@ import {
   updatePenData,
   PenData,
   type onPenChange,
-} from './PenData';
+} from './data/StylusData';
 import {
   triggerTouchChange,
   updateTouchData,
   TouchData,
   type onTouchChange,
-} from './TouchData';
-import {type TPS} from './libs/useTPS';
-import {type Screen} from './libs/useScreen';
+} from './data/FingerData';
+import {type Screen, type TPS} from './libs';
 
 // Pen handle view
 export function GestureHandle({

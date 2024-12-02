@@ -2,48 +2,48 @@ import {StatusBar} from 'react-native';
 import SystemNavigationBar from 'react-native-system-navigation-bar';
 import KeepAwake from '@sayem314/react-native-keep-awake';
 import React, {useCallback, useEffect} from 'react';
-import {GestureHandlerRootView} from 'react-native-gesture-handler';
 import useWebSocket, {ReadyState} from 'react-native-use-websocket';
 
-import {type PenData} from './PenData';
-import {GestureHandle} from './GestureHandle';
-import {useTPS, useScreen, useStorage, StorageProvider} from './libs';
-import {TouchData} from './TouchData';
+import {PackFingerData, PackStylusData} from './data';
+import {
+  useScreen,
+  useStorage,
+  StorageProvider,
+  MotionView,
+  StylusEvent,
+  FingerEvent,
+} from './libs';
 
 export default function App() {
-  const tps = useTPS();
   const screen = useScreen();
   useStorage;
 
   // Open ws
-  const {sendMessage, lastMessage, readyState} = useWebSocket(
-    'ws://localhost:57362',
-    {
-      shouldReconnect: closeEvent => true,
-      reconnectAttempts: Infinity,
-      reconnectInterval: 2000,
-    },
-  );
+  const {
+    sendMessage,
+    lastMessage: _lastMessage,
+    readyState,
+  } = useWebSocket('ws://localhost:57362', {
+    shouldReconnect: _closeEvent => true,
+    reconnectAttempts: Infinity,
+    reconnectInterval: 2000,
+  });
 
   // Send pen input
-  const onPenChange = useCallback(
-    (pen: PenData) => {
+  const onStylus = useCallback(
+    (stylus: StylusEvent) => {
       if (readyState == ReadyState.OPEN) {
-        sendMessage(
-          `${pen.hover ? (pen.down ? 'D' : 'U') : 'O'}${pen.pressure};${
-            pen.tps
-          };${pen.x};${pen.y};${pen.tiltX};${pen.tiltY}`,
-        );
+        sendMessage(PackStylusData(stylus));
       }
     },
     [readyState],
   );
 
-  // Send pen input
-  const onTouchChange = useCallback(
-    (touch: TouchData) => {
+  // Send stylus input
+  const onFinger = useCallback(
+    (finger: FingerEvent) => {
       if (readyState == ReadyState.OPEN) {
-        sendMessage(`T${touch.pos.join(';')}`);
+        sendMessage(PackFingerData(finger));
       }
     },
     [readyState],
@@ -65,16 +65,13 @@ export default function App() {
 
   return (
     <StorageProvider>
-      <GestureHandlerRootView onLayout={screen.bindLayout}>
-        <StatusBar hidden={true} />
-        <KeepAwake />
-        <GestureHandle
-          onTouchChange={onTouchChange}
-          onPenChage={onPenChange}
-          tps={tps}
-          screen={screen}
-        />
-      </GestureHandlerRootView>
+      <StatusBar hidden={true} />
+      <KeepAwake />
+      <MotionView
+        style={{width: '100%', height: '100%', backgroundColor: 'black'}}
+        onStylus={onStylus}
+        onFinger={onFinger}
+      />
     </StorageProvider>
   );
 }

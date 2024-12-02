@@ -1,39 +1,40 @@
-mod pen;
-mod screen;
-mod touch;
+mod action_parser;
+mod finger;
+mod stylus;
+mod view;
 
-use self::{pen::pen_parse, screen::screen_parse, touch::touch_parse};
-pub use self::{pen::PenData, screen::ScreenData, touch::TouchData};
+pub use self::{
+    action_parser::{create_action_element_split, ActionElementSplit, ActionElementSplitParser},
+    finger::FingerData,
+    stylus::StylusData,
+    view::ViewData,
+};
 
 pub enum ActionType {
-    Pen(PenData),
-    Touch(TouchData),
-    ScreenUpdate(ScreenData),
+    Stylus(StylusData),
+    Screen(ViewData),
+    Finger(FingerData),
 }
 
-pub fn action_parse(action: String) -> Result<ActionType, String> {
-    let Some(head) = action.chars().next() else {
-        return Err(String::from("Unexpected header"));
-    };
+pub trait FromSplit {
+    const KEY: char;
+    fn from_split(split: &mut ActionElementSplit) -> Result<ActionType, String>;
+}
 
-    let mut split = action.as_str()[1..].split(";");
+pub fn action_parse(text: String) -> Result<ActionType, String> {
+    let (head, mut split) = create_action_element_split(&text)?;
 
     match head {
         // Pen Down Up Out
-        'D' => pen_parse(true, true, &mut split),
-        'U' => pen_parse(false, true, &mut split),
-        'O' => pen_parse(false, false, &mut split),
+        StylusData::KEY => StylusData::from_split(&mut split),
 
         // Gesture End Start Continued
-        // 'E' => touch_parse(TouchState::End, &mut split),
-        // 'S' => touch_parse(TouchState::Start, &mut split),
-        // 'C' => touch_parse(TouchState::Continued, &mut split),
-
-        // Touch
-        'T' => touch_parse(&mut split),
+        FingerData::KEY => FingerData::from_split(&mut split),
 
         // View update
-        'V' => screen_parse(&mut split),
+        ViewData::KEY => ViewData::from_split(&mut split),
+
         _ => Err(String::from("Unexpected header")),
     }
+    .map_err(|err| format!("{text}: {err}"))
 }

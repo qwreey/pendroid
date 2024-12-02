@@ -1,5 +1,4 @@
-import {type TPS} from './libs/useTPS';
-import {type Screen} from './libs/useScreen';
+import {type Screen, type TPS} from '../libs';
 
 // Touch data
 export interface TouchData {

@@ -1,5 +1,5 @@
 use super::{
-    super::super::{parse::TouchData, utility::ErrToString},
+    super::super::{parse::FingerData, utility::ErrToString},
     PushEvent, WithAbs,
 };
 
@@ -15,20 +15,25 @@ const ABS_MT_POSITION_Y: u16 = AbsoluteAxisType::ABS_MT_POSITION_Y.0;
 const ABS_MT_TRACKING_ID: u16 = AbsoluteAxisType::ABS_MT_TRACKING_ID.0;
 const ABS_X: u16 = AbsoluteAxisType::ABS_X.0;
 const ABS_Y: u16 = AbsoluteAxisType::ABS_Y.0;
+const TOUCHS: [Key; 5] = [
+    Key::BTN_TOOL_FINGER,
+    Key::BTN_TOOL_DOUBLETAP,
+    Key::BTN_TOOL_TRIPLETAP,
+    Key::BTN_TOOL_QUADTAP,
+    Key::BTN_TOOL_QUINTTAP,
+];
 
-pub struct TouchBackend {
+pub struct FingerBackend {
     device: VirtualDevice,
-    current_touch: bool,
-    track: i32,
+    current_slot: i32,
+    current_down: bool,
     inputs: Vec<InputEvent>,
-    double: bool,
-    triple: bool,
-    quad: bool,
-    quint: bool,
-    single: bool,
+    touch_trackings: [i32; 12],
+    touch_active: [bool; 12],
+    touch_pos: [(i32, i32); 12],
 }
 
-impl TouchBackend {
+impl FingerBackend {
     pub fn new() -> Result<Self, String> {
         let mut device = VirtualDeviceBuilder::new()
             .err_tostring()?
@@ -60,7 +65,7 @@ impl TouchBackend {
                 // ABS_MT_TRACKING_ID
                 UinputAbsSetup::new(
                     AbsoluteAxisType::ABS_MT_TRACKING_ID,
-                    AbsInfo::new(0, 0, 65535, 0, 0, 1),
+                    AbsInfo::new(0, -1, 65535, 0, 0, 1),
                 ),
             ])?
             .with_keys(&AttributeSet::from_iter([
@@ -89,87 +94,76 @@ impl TouchBackend {
         Ok(Self {
             device,
             inputs: Vec::<InputEvent>::with_capacity(32),
-            current_touch: false,
-            track: 0,
-            double: false,
-            quad: false,
-            triple: false,
-            quint: false,
-            single: false,
+            current_slot: -1,
+            current_down: false,
+            touch_active: [false; 12],
+            touch_trackings: [-1i32; 12],
+            touch_pos: [(0, 0); 12],
         })
     }
 
-    fn increase_track(&mut self) {
-        self.track += 1;
-        if self.track == 65535 {
-            self.track = 1;
+    // Update slot
+    pub fn update_slot(&mut self, new_slot: i32) {
+        if new_slot != self.current_slot {
+            self.current_slot = new_slot;
+            self.inputs.push_abs_event(ABS_MT_SLOT, new_slot);
         }
     }
 
-    pub fn process_touch(&mut self, touch_data: &TouchData) -> Result<(), String> {
+    pub fn process(&mut self, finger_data: &FingerData) -> Result<(), String> {
         self.inputs.clear();
-        let down = !touch_data.pos.is_empty();
-        let len = touch_data.pos.len();
 
         // MT event
-        for (i, touch) in touch_data.pos.iter().enumerate() {
-            self.inputs.push_abs_event(ABS_MT_SLOT, i as i32);
-            self.inputs.push_abs_event(ABS_MT_POSITION_X, touch.0);
-            self.inputs.push_abs_event(ABS_MT_POSITION_Y, touch.1);
-        }
-
-        // ABS event
-        if down {
-            let (x, y) = touch_data.pos.first().unwrap();
-            self.inputs.push_abs_event(ABS_X, x.to_owned());
-            self.inputs.push_abs_event(ABS_Y, y.to_owned());
-        }
-
-        // Count touch
-        if self.single != (len == 1) {
-            self.single = len == 1;
-            self.inputs
-                .push_key(Key::BTN_TOOL_FINGER, if self.single { 1 } else { 0 });
-        }
-        if self.double != (len == 2) {
-            self.double = len == 2;
-            self.inputs
-                .push_key(Key::BTN_TOOL_DOUBLETAP, if self.double { 1 } else { 0 });
-        }
-        if self.triple != (len == 3) {
-            self.triple = len == 3;
-            self.inputs
-                .push_key(Key::BTN_TOOL_TRIPLETAP, if self.triple { 1 } else { 0 });
-        }
-        if self.quad != (len == 4) {
-            self.quad = len == 4;
-            self.inputs
-                .push_key(Key::BTN_TOOL_QUADTAP, if self.quad { 1 } else { 0 });
-        }
-        if self.quint != (len == 5) {
-            self.quint = len == 5;
-            self.inputs
-                .push_key(Key::BTN_TOOL_QUINTTAP, if self.quint { 1 } else { 0 });
-        }
-
-        // Change on off
-        if !down {
-            // Off
-            if self.current_touch {
-                self.current_touch = false;
-                self.inputs.push_abs_event(ABS_MT_TRACKING_ID, -1);
-                self.inputs.push_key(Key::BTN_TOUCH, 0);
+        for (index, touch) in finger_data.touchs.iter().enumerate() {
+            if touch.slot == -1 {
+                break;
             }
-        } else if !self.current_touch {
-            // On
-            self.increase_track();
-            self.inputs.push_key(Key::BTN_TOUCH, 1);
-            self.current_touch = true;
+
+            // Update ABS_MT_POSITION XY
+            if touch.x != -1 {
+                self.update_slot(touch.slot);
+                self.inputs.push_abs_event(ABS_MT_POSITION_X, touch.x);
+            }
+            if touch.y != -1 {
+                self.update_slot(touch.slot);
+                self.inputs.push_abs_event(ABS_MT_POSITION_Y, touch.y);
+            }
+            self.touch_pos[index] = (touch.x, touch.y);
+
+            // Update ABS_MT_TRACKING_ID
+            if self.touch_trackings[index] != touch.tracking_id {
+                self.update_slot(touch.slot);
+                self.touch_trackings[index] = touch.tracking_id;
+                self.inputs
+                    .push_abs_event(ABS_MT_TRACKING_ID, touch.tracking_id);
+            }
         }
 
-        // Send track
-        if self.current_touch {
-            self.inputs.push_abs_event(ABS_MT_TRACKING_ID, self.track);
+        // Count touch (Finger / Double / ...)
+        for (index, key) in TOUCHS.iter().enumerate() {
+            let active = finger_data.length == (index + 1) as i32;
+            if self.touch_active[index] != active {
+                self.touch_active[index] = active;
+                self.inputs.push_key(key, active as i32);
+            }
+        }
+
+        // Touch event (BTN_TOUCH)
+        let down = finger_data.length != 0;
+        if self.current_down != down {
+            self.current_down = down;
+            self.inputs.push_key(&Key::BTN_TOUCH, down as i32);
+        }
+
+        // ABS event (ABS_X, ABS_Y)
+        for (index, active) in self.touch_active.iter().enumerate() {
+            if !active {
+                continue;
+            }
+            let (x, y) = self.touch_pos[index];
+            self.inputs.push_abs_event(ABS_X, x);
+            self.inputs.push_abs_event(ABS_Y, y);
+            break;
         }
 
         self.device.emit(self.inputs.as_slice()).err_tostring()?;

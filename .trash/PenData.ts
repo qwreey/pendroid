@@ -1,6 +1,5 @@
 import {type StylusData} from 'react-native-gesture-handler/lib/typescript/web/interfaces';
-import {type TPS} from './libs/useTPS';
-import {type Screen} from './libs/useScreen';
+import {type TPS, type Screen} from '../libs';
 
 // Pen data type
 export interface PenData {
