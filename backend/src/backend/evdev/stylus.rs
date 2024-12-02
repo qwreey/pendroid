@@ -43,6 +43,7 @@ impl GetInputs for StylusBackend {
 }
 
 impl StylusBackend {
+    // Create new evdev device
     pub fn new() -> Result<Self, String> {
         let mut device = VirtualDeviceBuilder::new()
             .err_tostring()?
@@ -100,6 +101,8 @@ impl StylusBackend {
     }
 
     pub fn process(&mut self, pen_data: &StylusData) -> Result<(), String> {
+        let hover_changed = pen_data.hover != self.current_hover;
+        let button_changed = pen_data.button != self.current_button;
         self.inputs.clear();
 
         // Report position and pressure
@@ -109,20 +112,7 @@ impl StylusBackend {
         self.push_abs_event(ABS_TILT_X, pen_data.tilt_x);
         self.push_abs_event(ABS_TILT_Y, pen_data.tilt_y);
 
-        // Process pen hover
-        if !pen_data.hover {
-            // Disable all modes
-            if self.current_button {
-                self.push_key(&Key::BTN_TOOL_RUBBER, 0);
-                self.push_key(&Key::BTN_TOOL_PENCIL, 0);
-                self.current_button = false;
-            }
-        }
-
-        let hover_changed = pen_data.hover != self.current_hover;
-        let button_changed = pen_data.button != self.current_button;
-
-        // Process eraser
+        // Process tool (eraser, pencil)
         if (hover_changed || button_changed) && pen_data.hover && !pen_data.down {
             if pen_data.button {
                 if !hover_changed {
@@ -140,6 +130,7 @@ impl StylusBackend {
             self.current_button = pen_data.button;
         }
 
+        // Process hover
         if hover_changed && !pen_data.hover {
             self.push_key(
                 if self.current_button {
@@ -152,7 +143,7 @@ impl StylusBackend {
         }
         self.current_hover = pen_data.hover;
 
-        // Process pen down
+        // Process pen down (touch)
         if pen_data.down != self.current_down {
             self.push_key(
                 if self.current_button {

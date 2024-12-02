@@ -34,6 +34,7 @@ pub struct FingerBackend {
 }
 
 impl FingerBackend {
+    // Create new evdev device
     pub fn new() -> Result<Self, String> {
         let mut device = VirtualDeviceBuilder::new()
             .err_tostring()?
