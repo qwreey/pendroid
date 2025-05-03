@@ -1,0 +1,35 @@
+{
+  "name": "pendroid",
+  "version": "3.0.1",
+  "private": true,
+  "scripts": {
+    "android-debug": "react-native run-android --no-packager",
+    "ios": "react-native run-ios",
+    "start": "react-native start",
+    "android-release": "npx react-native build-android --mode release",
+    "android-install": "npx react-native build-android --tasks installRelease"
+  },
+  "dependencies": {
+    "@react-native-async-storage/async-storage": "^2.1.2",
+    "@sayem314/react-native-keep-awake": "^1.3.1",
+    "react": "^19.1.0",
+    "react-native": "^0.79.2",
+    "react-native-buffer": "^6.0.3",
+    "react-native-system-navigation-bar": "^2.6.4"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.27.1",
+    "@babel/preset-env": "^7.27.1",
+    "@babel/runtime": "^7.27.1",
+    "@react-native-community/cli": "18.0.0",
+    "@react-native-community/cli-platform-android": "18.0.0",
+    "@react-native/babel-preset": "0.79.2",
+    "@react-native/metro-config": "0.79.2",
+    "@react-native/typescript-config": "0.79.2",
+    "@types/react": "^19.1.0",
+    "typescript": "5.7.2"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
