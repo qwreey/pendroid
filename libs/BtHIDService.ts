@@ -33,6 +33,8 @@ export default class BtHIDService {
         this.writeReport(buf, InputId.ID_STYLUS);
     }
     public static writeStylus(data: StylusEvent) {
+        this.dropAllTouchs()
+
         const buf = Buffer.alloc(11);
         let offset = 0;
 
@@ -68,8 +70,29 @@ export default class BtHIDService {
     }
 
     private static lastTouchs: (Touch|null)[] = [ null, null, null, null ];
+    private static dropAllTouchs() {
+        this.lastTouchs.forEach((touch, slot)=>{
+            if (touch == null) return;
+
+            const buf = Buffer.alloc(6);
+            let offset = 0;
+
+            offset = buf.writeUInt8(
+                0 | slot << 2,
+                offset
+            );
+
+            offset = buf.writeInt16LE(touch.x, offset);
+            offset = buf.writeInt16LE(touch.y, offset);
+            offset = buf.writeUInt8(0, offset);
+
+            this.lastTouchs[slot] = null;
+
+            this.writeReport(buf, InputId.ID_TOUCHPAD);
+        })
+    }
     private static writeTouch(touch: Touch, len: number, button: number) {
-        const buf = Buffer.alloc(7);
+        const buf = Buffer.alloc(6);
         let offset = 0;
 
         // tip and slot
@@ -83,16 +106,17 @@ export default class BtHIDService {
             offset = buf.writeInt16LE(this.lastTouchs[touch.slot]?.x ?? 0, offset);
             offset = buf.writeInt16LE(this.lastTouchs[touch.slot]?.y ?? 0, offset);
         } else {
+            // no diff
+            const old = this.lastTouchs[touch.slot];
+            if (old?.x == touch.x && old?.y == touch.y) {
+                return;
+            }
             offset = buf.writeInt16LE(touch.x, offset);
             offset = buf.writeInt16LE(touch.y, offset);
         }
 
-        // press button
-        offset = buf.writeUInt8(1 << (Math.max(button, 3) - 1), offset);
-
         // update length
         offset = buf.writeUInt8(len, offset);
-
 
         this.lastTouchs[touch.slot] = touch;
 
