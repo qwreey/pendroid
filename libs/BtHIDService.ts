@@ -20,7 +20,7 @@ export default class BtHIDService {
     private static barrelActivated: boolean = false;
     private static lastButtonState: boolean = false;
     private static lastButtonStartTimestamp: number = -1;
-    private static barrelTimeout = 420;
+    private static barrelTimeout = 540;
     private static writeDropStylusState(data: StylusEvent) {
         const buf = Buffer.alloc(11);
         let offset = 0;
