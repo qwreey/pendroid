@@ -137,13 +137,14 @@ class BtHIDService(private val reactContext: ReactApplicationContext) : ReactCon
         0x09, 0x42, // Usage (Tip Switch)
         0x09, 0x45, // Usage (Eraser Switch)
         0x09, 0x32, // Usage (In Range)
+        0x09, 0x44, // Usage (Barrel Button)
         0x15, 0x00, // Logical Minimum (0)
         0x25, 0x01, // Logical Maximum (1)
         0x75, 0x01, // Report Size (1)
-        0x95, 0x03, // Report Count (3)
+        0x95, 0x04, // Report Count (4)
         0x81, 0x02, // Input (Data,Var,Abs)
         0x75, 0x01, // Report Size (1)
-        0x95, 0x05, // Report Count (5)
+        0x95, 0x04, // Report Count (4)
         0x81, 0x03, // Input (Cnst,Var,Abs)
         // 1 bytes
 

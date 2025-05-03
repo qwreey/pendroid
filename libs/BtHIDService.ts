@@ -16,7 +16,11 @@ export default class BtHIDService {
     }
 
     // SEE: https://learn.microsoft.com/en-us/windows-hardware/design/component-guidelines/windows-pen-states
-    private static buttonActivated: boolean = false;
+    private static eraserActivated: boolean = false;
+    private static barrelActivated: boolean = false;
+    private static lastButtonState: boolean = false;
+    private static lastButtonStartTimestamp: number = -1;
+    private static barrelTimeout = 420;
     private static writeDropStylusState(data: StylusEvent) {
         const buf = Buffer.alloc(11);
         let offset = 0;
@@ -38,15 +42,42 @@ export default class BtHIDService {
         const buf = Buffer.alloc(11);
         let offset = 0;
 
-        // Update side button state
+        // Update barrel state
+        if (!this.lastButtonState && data.button) {
+            if (this.lastButtonStartTimestamp == -1) {
+                // First clicking
+                this.lastButtonStartTimestamp = data.timestamp;
+            } else if (data.timestamp - this.lastButtonStartTimestamp < this.barrelTimeout) {
+                // Second clicking
+                this.barrelActivated = true;
+                this.lastButtonStartTimestamp = -1;
+            } else {
+                // Timeout
+                this.lastButtonStartTimestamp = data.timestamp;
+            }
+        }
+        this.lastButtonState = data.button;
+        if (!data.hover) {
+            this.barrelActivated = false;
+            this.lastButtonStartTimestamp = -1;
+            this.lastButtonState = false;
+        }
+        if (!data.button) {
+            this.barrelActivated = false;
+        }
+        if (data.down) {
+            this.lastButtonStartTimestamp = -1;
+        }
+
+        // Update eraser state when only not down
         if (data.button) {
-            if (!data.down && !this.buttonActivated) {
-                this.buttonActivated = true;
+            if (!data.down && !this.eraserActivated && !this.barrelActivated) {
+                this.eraserActivated = true;
                 this.writeDropStylusState(data);
             }
         } else {
-            if (!data.down && this.buttonActivated) {
-                this.buttonActivated = false;
+            if (!data.down && this.eraserActivated) {
+                this.eraserActivated = false;
                 this.writeDropStylusState(data);
             }
         }
@@ -54,8 +85,9 @@ export default class BtHIDService {
         // Write tip / eraser / range state
         offset = buf.writeUInt8(
             (data.down ? 0b0000_0001 : 0) // (Tip Switch)
-            | (this.buttonActivated ? 0b0000_0010 : 0) // (Eraser Switch)
-            | ((!this.buttonActivated && data.hover) ? 0b0000_0100 : 0), // (In Range)
+            | (this.eraserActivated ? 0b0000_0010 : 0) // (Eraser Switch)
+            | ((!this.eraserActivated && data.hover) ? 0b0000_0100 : 0) // (In Range)
+            | (this.barrelActivated ? 0b0000_1000 : 0), // (Barrel Button)
             offset
         );
 

@@ -98,7 +98,7 @@ class StylusHandle(val callback: Runnable) {
         this.hover = hover
         x = ev.x.toInt()
         y = ev.y.toInt()
-        timestamp = (ev.eventTime / 100).toInt()
+        timestamp = ev.eventTime.toInt()
 
         // Calc & Update tilts
         val altitudeAngle = HALF_PI - ev.getAxisValue(MotionEvent.AXIS_TILT).toDouble()
