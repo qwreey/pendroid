@@ -80,6 +80,7 @@ class StylusHandle(val callback: Runnable) {
     private var x: Int = 0
     private var y: Int = 0
     private var hover: Boolean = false
+    private var timestamp: Int = 0
 
     // Process motion event
     private fun processMotionEvent(ev: MotionEvent, hover: Boolean) {
@@ -96,6 +97,7 @@ class StylusHandle(val callback: Runnable) {
         this.hover = hover
         x = ev.x.toInt()
         y = ev.y.toInt()
+        timestamp = ev.eventTime.toInt()
 
         // Calc & Update tilts
         val altitudeAngle = HALF_PI - ev.getAxisValue(MotionEvent.AXIS_TILT).toDouble()
@@ -143,6 +145,7 @@ class StylusHandle(val callback: Runnable) {
             putBoolean("button", button)
             putInt("x", x)
             putInt("y", y)
+            putInt("timestamp", timestamp)
         }
     }
 }

@@ -1,56 +1,58 @@
-use std::{iter::Peekable, str::Split};
+use super::ActionType;
 
-use crate::utility::ErrToString;
-
-pub type ActionElementSplit<'a, 'b> = Split<'a, &'b str>;
-
-pub fn create_action_element_split(action: &str) -> Result<(char, Split<'_, &str>), String> {
-    let Some(head) = action.chars().next() else {
-        return Err(String::from("Unexpected header"));
-    };
-    let split = action[1..].split(";");
-    Ok((head, split))
+pub enum FieldType {
+    UInt8,
+    Int8,
+    UInt16,
+    Int32,
+    UInt32,
 }
-
-pub trait ActionElementSplitParser {
-    fn parse_element<T: ActionElement>(&mut self, name: &'static str) -> Result<T, String>;
-}
-impl ActionElementSplitParser for ActionElementSplit<'_, '_> {
-    fn parse_element<T: ActionElement>(&mut self, name: &'static str) -> Result<T, String> {
-        T::from_element(
-            self.next()
-                .ok_or_else(|| format!("field {name} required"))?,
-        )
-    }
-}
-impl ActionElementSplitParser for Peekable<&mut ActionElementSplit<'_, '_>> {
-    fn parse_element<T: ActionElement>(&mut self, name: &'static str) -> Result<T, String> {
-        T::from_element(
-            self.next()
-                .ok_or_else(|| format!("field {name} required"))?,
-        )
-    }
-}
-
-pub trait ActionElement
-where
-    Self: Sized,
-{
-    fn from_element(text: &str) -> Result<Self, String>;
-}
-macro_rules! impl_num_action_element {
-    ($target:ty) => {
-        impl ActionElement for $target {
-            fn from_element(text: &str) -> Result<Self, String> {
-                text.parse::<$target>().err_tostring()
-            }
+impl FieldType {
+    const fn get_len(&self) -> usize {
+        match self {
+            FieldType::Int8 => 1,
+            FieldType::UInt8 => 1,
+            FieldType::UInt16 => 2,
+            FieldType::Int32 => 4,
+            FieldType::UInt32 => 4,
         }
-    };
-}
-impl ActionElement for bool {
-    fn from_element(text: &str) -> Result<Self, String> {
-        Ok(text == "T")
     }
 }
-impl_num_action_element!(i32);
-impl_num_action_element!(u32);
+
+pub struct FieldParser {
+    fields: Vec<FieldType>,
+    len: usize,
+    id: u8,
+}
+
+impl FieldParser {
+    pub fn new(id: u8, fields: Vec<FieldType>) -> FieldParser {
+        let mut len = 2;
+
+        for item in &fields {
+            len += item.get_len();
+        }
+
+        FieldParser { fields, len, id }
+    }
+    pub fn get_id(&self) -> u8 {
+        self.id
+    }
+    pub fn get_len(&self) -> usize {
+        self.len
+    }
+}
+
+pub trait ActionReader {
+    fn get_field_parser(&self) -> &FieldParser;
+    fn get_id(&self) -> u8 {
+        self.get_field_parser().get_id()
+    }
+    fn get_len(&self, _buf: &[u8]) -> usize {
+        self.get_field_parser().get_len()
+    }
+    fn can_read(&self, buf: &[u8]) -> bool {
+        buf.len() >= self.get_len(buf) && *buf.get(1).unwrap() == self.get_id()
+    }
+    fn read(&self, buf: &[u8]) -> ActionType;
+}

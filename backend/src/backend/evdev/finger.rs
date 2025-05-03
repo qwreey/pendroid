@@ -1,26 +1,23 @@
-use super::{
-    super::super::{parse::FingerData, utility::ErrToString},
-    PushEvent, WithAbs,
-};
+use super::{super::super::parse::FingerData, event_list::PushEvent, with_abs::WithAbs};
 
 use evdev::{
-    uinput::{VirtualDevice, VirtualDeviceBuilder},
-    AbsInfo, AbsoluteAxisType, AttributeSet, BusType, InputEvent, InputId, Key, PropType,
-    UinputAbsSetup,
+    uinput::VirtualDevice, AbsInfo, AbsoluteAxisCode, AttributeSet, BusType, InputEvent, InputId,
+    KeyCode, PropType, UinputAbsSetup,
 };
+use qwreey_utility_rs::ErrToString;
 
-const ABS_MT_SLOT: u16 = AbsoluteAxisType::ABS_MT_SLOT.0;
-const ABS_MT_POSITION_X: u16 = AbsoluteAxisType::ABS_MT_POSITION_X.0;
-const ABS_MT_POSITION_Y: u16 = AbsoluteAxisType::ABS_MT_POSITION_Y.0;
-const ABS_MT_TRACKING_ID: u16 = AbsoluteAxisType::ABS_MT_TRACKING_ID.0;
-const ABS_X: u16 = AbsoluteAxisType::ABS_X.0;
-const ABS_Y: u16 = AbsoluteAxisType::ABS_Y.0;
-const TOUCHS: [Key; 5] = [
-    Key::BTN_TOOL_FINGER,
-    Key::BTN_TOOL_DOUBLETAP,
-    Key::BTN_TOOL_TRIPLETAP,
-    Key::BTN_TOOL_QUADTAP,
-    Key::BTN_TOOL_QUINTTAP,
+const ABS_MT_SLOT: u16 = AbsoluteAxisCode::ABS_MT_SLOT.0;
+const ABS_MT_POSITION_X: u16 = AbsoluteAxisCode::ABS_MT_POSITION_X.0;
+const ABS_MT_POSITION_Y: u16 = AbsoluteAxisCode::ABS_MT_POSITION_Y.0;
+const ABS_MT_TRACKING_ID: u16 = AbsoluteAxisCode::ABS_MT_TRACKING_ID.0;
+const ABS_X: u16 = AbsoluteAxisCode::ABS_X.0;
+const ABS_Y: u16 = AbsoluteAxisCode::ABS_Y.0;
+const TOUCHS: [KeyCode; 5] = [
+    KeyCode::BTN_TOOL_FINGER,
+    KeyCode::BTN_TOOL_DOUBLETAP,
+    KeyCode::BTN_TOOL_TRIPLETAP,
+    KeyCode::BTN_TOOL_QUADTAP,
+    KeyCode::BTN_TOOL_QUINTTAP,
 ];
 
 pub struct FingerBackend {
@@ -36,47 +33,47 @@ pub struct FingerBackend {
 impl FingerBackend {
     // Create new evdev device
     pub fn new() -> Result<Self, String> {
-        let mut device = VirtualDeviceBuilder::new()
+        let mut device = VirtualDevice::builder()
             .err_tostring()?
             .name("pendroid-touchpad")
             .input_id(InputId::new(BusType::BUS_USB, 0u16, 1333u16, 1u16))
             .with_abs(&[
                 // TOOL INFO
                 UinputAbsSetup::new(
-                    AbsoluteAxisType::ABS_MT_TOOL_TYPE,
+                    AbsoluteAxisCode::ABS_MT_TOOL_TYPE,
                     AbsInfo::new(2, 0, 0, 0, 0, 1),
                 ),
                 // ABS X / Y
-                UinputAbsSetup::new(AbsoluteAxisType::ABS_X, AbsInfo::new(0, 0, 2800, 6, 10, 11)),
-                UinputAbsSetup::new(AbsoluteAxisType::ABS_Y, AbsInfo::new(0, 0, 1752, 6, 10, 11)),
+                UinputAbsSetup::new(AbsoluteAxisCode::ABS_X, AbsInfo::new(0, 0, 2800, 6, 10, 11)),
+                UinputAbsSetup::new(AbsoluteAxisCode::ABS_Y, AbsInfo::new(0, 0, 1752, 6, 10, 11)),
                 // ABS MT X / Y
                 UinputAbsSetup::new(
-                    AbsoluteAxisType::ABS_MT_POSITION_X,
+                    AbsoluteAxisCode::ABS_MT_POSITION_X,
                     AbsInfo::new(0, 0, 2800, 6, 10, 11),
                 ),
                 UinputAbsSetup::new(
-                    AbsoluteAxisType::ABS_MT_POSITION_Y,
+                    AbsoluteAxisCode::ABS_MT_POSITION_Y,
                     AbsInfo::new(0, 0, 1752, 6, 10, 11),
                 ),
                 // ABS SLOT
                 UinputAbsSetup::new(
-                    AbsoluteAxisType::ABS_MT_SLOT,
+                    AbsoluteAxisCode::ABS_MT_SLOT,
                     AbsInfo::new(0, 0, 12, 0, 0, 1),
                 ),
                 // ABS_MT_TRACKING_ID
                 UinputAbsSetup::new(
-                    AbsoluteAxisType::ABS_MT_TRACKING_ID,
+                    AbsoluteAxisCode::ABS_MT_TRACKING_ID,
                     AbsInfo::new(0, -1, 65535, 0, 0, 1),
                 ),
             ])?
             .with_keys(&AttributeSet::from_iter([
-                Key::BTN_TOUCH,
-                Key::BTN_TOOL_FINGER,
-                Key::BTN_TOOL_DOUBLETAP,
-                Key::BTN_TOOL_TRIPLETAP,
-                Key::BTN_TOOL_QUADTAP,
-                Key::BTN_TOOL_QUINTTAP,
-                Key::BTN_LEFT,
+                KeyCode::BTN_TOUCH,
+                KeyCode::BTN_TOOL_FINGER,
+                KeyCode::BTN_TOOL_DOUBLETAP,
+                KeyCode::BTN_TOOL_TRIPLETAP,
+                KeyCode::BTN_TOOL_QUADTAP,
+                KeyCode::BTN_TOOL_QUINTTAP,
+                KeyCode::BTN_LEFT,
             ]))
             .err_tostring()?
             .with_properties(&AttributeSet::from_iter([
@@ -153,7 +150,7 @@ impl FingerBackend {
         let down = finger_data.length != 0;
         if self.current_down != down {
             self.current_down = down;
-            self.inputs.push_key(&Key::BTN_TOUCH, down as i32);
+            self.inputs.push_key(&KeyCode::BTN_TOUCH, down as i32);
         }
 
         // ABS event (ABS_X, ABS_Y)

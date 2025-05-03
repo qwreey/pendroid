@@ -10,6 +10,7 @@ export interface StylusEvent {
   x: number;
   y: number;
   hover: boolean;
+  timestamp: number;
 }
 
 export interface Touch {

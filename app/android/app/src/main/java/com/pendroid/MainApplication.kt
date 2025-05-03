@@ -11,6 +11,7 @@ import com.facebook.react.defaults.DefaultReactHost.getDefaultReactHost
 import com.facebook.react.defaults.DefaultReactNativeHost
 import com.facebook.react.soloader.OpenSourceMergedSoMapping
 import com.facebook.soloader.SoLoader
+import com.pendroid.btservice.BtServicePackage
 import com.pendroid.motionview.MotionViewPackage
 
 class MainApplication : Application(), ReactApplication {
@@ -19,7 +20,8 @@ class MainApplication : Application(), ReactApplication {
       object : DefaultReactNativeHost(this) {
         override fun getPackages(): List<ReactPackage> =
             PackageList(this).packages.apply {
-               add(MotionViewPackage())
+                add(MotionViewPackage())
+                add(BtServicePackage())
             }
 
         override fun getJSMainModuleName(): String = "index"

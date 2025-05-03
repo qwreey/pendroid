@@ -6,144 +6,158 @@ import {
   useContext,
   useRef,
   type PropsWithChildren,
+  useMemo,
 } from 'react';
 
-export type TransactionState<U> = {
-  running: boolean;
-  result?: U;
-  errored?: boolean;
-};
-
-export type ValueHandler = {
-  prefetch(): undefined;
-  read(): TransactionState<any>;
-  write(
-    value: any,
-    errorHandler?: (error: string) => undefined,
-  ): TransactionState<string | undefined>;
-};
-
+// #region Provider
 export type Storage = {
   cachedValues: {
-    [key: string]: TransactionState<any>;
-  };
-  updateTriggers: {
-    [key: string]: Array<React.Dispatch<React.SetStateAction<any>>>;
-  };
+    [key: string]: TransactionState<any> | undefined,
+  },
+  rerenderTriggers: {
+    [key: string]: Array<React.Dispatch<React.SetStateAction<any>>> | undefined,
+  },
   waitingReadPromises: {
-    [key: string]: Promise<object> | undefined;
-  };
+    [key: string]: Promise<void> | undefined,
+  },
   defaultValues: {
-    [key: string]: any;
-  };
+    [key: string]: any | undefined,
+  },
 };
-
-export const StorageContext = createContext({
-  cachedValues: {},
-  updateTriggers: {},
-  waitingReadPromises: {},
-} as Storage);
-
-interface StorageProviderProps extends PropsWithChildren {
-  defaultValues?: {
-    [key: string]: any;
-  };
-}
 
 export function StorageProvider({
   defaultValues,
   children,
-}: StorageProviderProps) {
+}: StorageProvider.Params) {
   const storage = useRef({
     cachedValues: {},
-    updateTriggers: {},
+    rerenderTriggers: {},
     waitingReadPromises: {},
     defaultValues: defaultValues ?? {},
   } as Storage);
   return (
-    <StorageContext.Provider value={storage.current}>
+    <StorageProvider.Context.Provider value={storage.current}>
       {children}
-    </StorageContext.Provider>
+    </StorageProvider.Context.Provider>
   );
 }
+export namespace StorageProvider {
+  export const Context = createContext({
+    cachedValues: {},
+    rerenderTriggers: {},
+    waitingReadPromises: {},
+  } as Storage);
 
-export function useStorage(key: string) {
-  const storageCache = useContext(StorageContext);
+  export type Params = PropsWithChildren<{
+    defaultValues?: {
+      [key: string]: any,
+    },
+  }>;
+}
+// #endregion Provider
+
+// #region Transaction
+export type TransactionState<Value> = {
+  running: boolean,
+  result?: Value,
+  errored?: boolean,
+};
+
+export class TransactionHandler<Value> {
+  private storage: Storage;
+  private key: string;
+  constructor(storage: Storage, key: string) {
+    this.storage = storage;
+    this.key = key;
+  }
+
+  private triggerRerender() {
+    const triggers = this.storage.rerenderTriggers[this.key];
+    if (!triggers) return;
+    for (const rerender of triggers) rerender({});
+  }
+
+  private updateCache(transaction: TransactionState<Value>) {
+    this.storage.cachedValues[this.key] = transaction;
+  }
+
+  public read(): TransactionState<Value> {
+    // Check cached value first
+    let cachedValue = this.storage.cachedValues[this.key];
+    if (cachedValue) return cachedValue;
+
+    // If not loaded, call getItem
+    this.updateCache(cachedValue = {running: true});
+    this.storage.waitingReadPromises[this.key] =
+      AsyncStorage.getItem(this.key)
+      .then(value => {
+        // Successfully loaded
+        this.updateCache({
+          running: false,
+          result: value
+            ? JSON.parse(value)
+            : this.storage.defaultValues[this.key],
+          errored: false,
+        });
+      })
+      .catch(error => {
+        // Failed
+        this.updateCache({
+          running: false,
+          result: error,
+          errored: true,
+        });
+      })
+      .finally(() => {
+        // Trigger all renders
+        delete this.storage.waitingReadPromises[this.key];
+        this.triggerRerender();
+      });
+
+    return cachedValue;
+  }
+
+  public write(value: Value, errorHandler: (error: string) => void) {
+    // call setItem to save
+    AsyncStorage.setItem(this.key, JSON.stringify(value))
+      .then(() => {
+        // Successfully loaded update value and trigger all renders
+        this.updateCache({
+          running: false,
+          result: value,
+          errored: false,
+        });
+        this.triggerRerender();
+      })
+      .catch(
+        // Failed
+        errorHandler
+        || (error => {
+          console.error(error);
+        }),
+      );
+  }
+};
+// #endregion Transaction
+
+export function useStorage<Value>(key: string): TransactionHandler<Value> {
+  const storage = useContext(StorageProvider.Context);
   const [_, updateTrigger] = useState({});
 
-  // Add update trigger
+  // Add rerender trigger
   useEffect(() => {
-    let updateTriggers = storageCache.updateTriggers[key];
-    if (updateTriggers === undefined)
-      updateTriggers = storageCache.updateTriggers[key] = [];
+    let updateTriggers = storage.rerenderTriggers[key];
+    if (updateTriggers === undefined) {
+      updateTriggers = storage.rerenderTriggers[key] = [];
+    }
     updateTriggers.push(updateTrigger);
     return () => {
       updateTriggers.splice(updateTriggers.indexOf(updateTrigger), 1);
     };
   }, []);
 
-  // Create value handler
-  const valueHandler = useRef(null as unknown as ValueHandler);
-  if (!valueHandler.current)
-    valueHandler.current = {
-      read() {
-        // load cached value first
-        let value = storageCache.cachedValues[key];
-        if (value) return value;
+  // Create transaction handler
+  const handler = useMemo(() => new TransactionHandler<Value>(storage, key), []);
 
-        // if not loaded, call getItem
-        if (storageCache.waitingReadPromises[key]) return {running: true};
-        AsyncStorage.getItem(key)
-          .then(value => {
-            // successfully loaded
-            storageCache.cachedValues[key] = {
-              running: false,
-              result: value
-                ? JSON.parse(value)
-                : storageCache.defaultValues[key],
-              errored: false,
-            };
-          })
-          .catch(error => {
-            // failed
-            storageCache.cachedValues[key] = {
-              running: false,
-              result: error,
-              errored: true,
-            };
-          })
-          .finally(() => {
-            // trigger all renders
-            if (storageCache.updateTriggers[key])
-              for (const trigger of storageCache.updateTriggers[key])
-                trigger({});
-          });
-
-        return {running: true};
-      },
-      write(value, errorHandler) {
-        // call setItem to save
-        AsyncStorage.setItem(key, JSON.stringify(value))
-          .then(() => {
-            // successfully loaded update value and trigger all renders
-            storageCache.cachedValues[key] = {
-              running: false,
-              result: value,
-              errored: false,
-            };
-            if (storageCache.updateTriggers[key])
-              for (const trigger of storageCache.updateTriggers[key])
-                trigger({});
-          })
-          .catch(
-            // failed
-            errorHandler ||
-              (error => {
-                console.error(error);
-              }),
-          );
-      },
-    } as ValueHandler;
-
-  return valueHandler.current;
+  return handler;
 }

@@ -1,4 +1,7 @@
 {
   "name": "pendroid",
-  "displayName": "pendroid"
+  "displayName": "pendroid",
+  "android": {
+    "permissions": ["android.permission.BLUETOOTH_CONNECT"]
+  }
 }

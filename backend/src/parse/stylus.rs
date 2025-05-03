@@ -1,4 +1,6 @@
-use super::{ActionElementSplit, ActionElementSplitParser, ActionType, FromSplit};
+use bytebuffer::ByteBuffer;
+
+use super::{ActionReader, ActionType, FieldParser, FieldType};
 
 #[derive(Debug)]
 pub struct StylusData {
@@ -10,31 +12,58 @@ pub struct StylusData {
     pub down: bool,
     pub hover: bool,
     pub button: bool,
+    pub timestamp: i32,
 }
 
-impl FromSplit for StylusData {
-    const KEY: char = 'S';
-    fn from_split(split: &mut ActionElementSplit) -> Result<ActionType, String> {
-        let hover = split.parse_element::<bool>("hover")?;
-        let down = split.parse_element::<bool>("down")?;
-        let button = split.parse_element::<bool>("button")?;
-        let x = split.parse_element::<i32>("x")?;
-        let y = split.parse_element::<i32>("y")?;
-        let tilt_x = split.parse_element::<i32>("tilt_x")?;
-        let tilt_y = split.parse_element::<i32>("tilt_y")?;
-        let pressure = split.parse_element::<i32>("pressure")?;
+pub struct StylusReader {
+    reader: FieldParser,
+}
+impl StylusReader {
+    pub fn new() -> StylusReader {
+        StylusReader {
+            reader: FieldParser::new(
+                132,
+                vec![
+                    FieldType::UInt8,
+                    FieldType::UInt16,
+                    FieldType::UInt16,
+                    FieldType::Int8,
+                    FieldType::Int8,
+                    FieldType::UInt16,
+                    FieldType::Int32,
+                ],
+            ),
+        }
+    }
+}
+impl ActionReader for StylusReader {
+    fn get_field_parser(&self) -> &FieldParser {
+        &self.reader
+    }
+    fn read(&self, buf: &[u8]) -> ActionType {
+        let mut bytes = ByteBuffer::from_bytes(buf);
 
-        let stylus_data = StylusData {
-            pressure,
-            button,
+        bytes.read_u8().unwrap();
+        bytes.read_u8().unwrap();
+
+        let flags = bytes.read_u8().unwrap();
+        let x = bytes.read_u16().unwrap() as i32;
+        let y = bytes.read_u16().unwrap() as i32;
+        let tilt_x = bytes.read_i8().unwrap() as i32;
+        let tilt_y = bytes.read_i8().unwrap() as i32;
+        let pressure = bytes.read_u16().unwrap() as i32;
+        let timestamp = bytes.read_i32().unwrap();
+
+        ActionType::Stylus(StylusData {
+            hover: (flags & 0b0001) != 0,
+            down: (flags & 0b0010) != 0,
+            button: (flags & 0b0100) != 0,
             x,
             y,
             tilt_x,
             tilt_y,
-            down,
-            hover,
-        };
-
-        Ok(ActionType::Stylus(stylus_data))
+            pressure,
+            timestamp,
+        })
     }
 }
