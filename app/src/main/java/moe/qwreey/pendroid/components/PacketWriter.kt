@@ -1,6 +1,7 @@
 package moe.qwreey.pendroid.components
 
 import android.Manifest
+import android.util.Log
 import androidx.annotation.RequiresPermission
 import moe.qwreey.pendroid.components.motionbox.FingerHandle
 import moe.qwreey.pendroid.components.motionbox.FingerHandle.Companion.TOUCH_MAX
@@ -80,7 +81,7 @@ class PacketWriter(var btHidService: BtHIDService) {
         if (data.button) {
             if (!data.down && !eraserActivated && !barrelActivated) {
                 eraserActivated = true
-                writeDropStylusState(data)
+                writeDropStylusState(data, 0b0000_0010)
             }
         } else {
             if (!data.down && eraserActivated) {
