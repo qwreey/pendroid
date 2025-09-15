@@ -17,7 +17,9 @@ class StylusHandle(var callback: (handle: StylusHandle) -> Unit = {}) {
         const val THREE_TWOS_PI = (PI * 3) / 2
         const val RAD_TO_DEG = 180 / PI
         const val EPSILON = 0.000000001
-        private fun spherical2tilt(altitudeAngle: Double, azimuthAngle: Double): Pair<Double, Double> {
+
+        @Suppress("NOTHING_TO_INLINE")
+        private inline fun spherical2tilt(altitudeAngle: Double, azimuthAngle: Double): Pair<Double, Double> {
             var tiltXrad = 0.0
             var tiltYrad = 0.0
 
@@ -90,7 +92,8 @@ class StylusHandle(var callback: (handle: StylusHandle) -> Unit = {}) {
         private set
 
     // Process motion event
-    private fun processMotionEvent(ev: MotionEvent, hover: Boolean) {
+    @Suppress("NOTHING_TO_INLINE")
+    private inline fun processMotionEvent(ev: MotionEvent, hover: Boolean) {
         // Update down state
         down = when (ev.action) {
             MotionEvent.ACTION_DOWN, ACTION_ERASER_DOWN -> true

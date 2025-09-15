@@ -6,6 +6,7 @@ import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothHidDevice
 import android.bluetooth.BluetoothHidDeviceAppQosSettings
 import android.bluetooth.BluetoothHidDeviceAppSdpSettings
+import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothProfile
 import android.content.Context
 import android.util.DisplayMetrics
@@ -18,8 +19,9 @@ import java.util.concurrent.Executors
 
 class BtHIDService(val context: Context, var eventCallback : ((BtHIDService, String, String?) -> Unit)? = null) {
     private val TAG = "BtHIDService"
-    private val bluetoothAdapter: BluetoothAdapter = BluetoothAdapter.getDefaultAdapter()
-    private val service = HIDService()
+    private val bluetoothManager: BluetoothManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
+    private val bluetoothAdapter: BluetoothAdapter = bluetoothManager.adapter
+    val service = HIDService()
 
     companion object {
         private const val ID_STYLUS = 1
@@ -38,7 +40,7 @@ class BtHIDService(val context: Context, var eventCallback : ((BtHIDService, Str
     }
 
     private val displayMetrics by lazy { DisplayMetrics().also {
-            metrics -> (context.getSystemService(Context.WINDOW_SERVICE) as WindowManager).defaultDisplay.getMetrics(metrics)
+        metrics -> (context.getSystemService(Context.WINDOW_SERVICE) as WindowManager).defaultDisplay.getRealMetrics(metrics)
     } }
 
     private val fingerDescriptor by lazy { intArrayOf(
@@ -209,7 +211,7 @@ class BtHIDService(val context: Context, var eventCallback : ((BtHIDService, Str
     ).map { i -> i.toByte() }.toByteArray() }
 
     private val hidQos by lazy { BluetoothHidDeviceAppQosSettings(
-        BluetoothHidDeviceAppQosSettings.SERVICE_BEST_EFFORT,
+        BluetoothHidDeviceAppQosSettings.SERVICE_GUARANTEED,
         0,
         0,
         0,
@@ -225,14 +227,14 @@ class BtHIDService(val context: Context, var eventCallback : ((BtHIDService, Str
         hidDescriptor
     ) }
 
-    private inner class HIDService : BluetoothProfile.ServiceListener, BluetoothHidDevice.Callback() {
+    inner class HIDService : BluetoothProfile.ServiceListener, BluetoothHidDevice.Callback() {
         val executor = Executors.newSingleThreadExecutor()!!
         var registered = false // 앱의 등록됨 여부
         var hidProxy: BluetoothHidDevice? = null // HID 서비스
 
         // 연결되어있는 디바이스를 HID 앱에 연결하기
         @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
-        public fun reconnectOldDevice() {
+        fun reconnectOldDevice() {
             for (oldDevice in hidProxy!!.getDevicesMatchingConnectionStates(
                 intArrayOf(
                     BluetoothProfile.STATE_DISCONNECTED,
@@ -262,7 +264,8 @@ class BtHIDService(val context: Context, var eventCallback : ((BtHIDService, Str
 
         // HID 장치에 이벤트 전송
         @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
-        fun sendReport(byteContent: ByteArray, inputId: Int) {
+        @Suppress("NOTHING_TO_INLINE")
+        inline fun sendReport(byteContent: ByteArray, inputId: Int) {
             if (hidProxy == null) return
             for (device in hidProxy!!.connectedDevices) {
                 service.hidProxy!!.sendReport(device, inputId, byteContent)
@@ -336,7 +339,7 @@ class BtHIDService(val context: Context, var eventCallback : ((BtHIDService, Str
 
     // 서비스를 준비시킵니다
     @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
-    public fun initService() {
+    fun initService() {
         Log.d(TAG, "initService: Initializing service started")
         if (service.registered) return
         if (service.hidProxy == null) {
@@ -348,7 +351,7 @@ class BtHIDService(val context: Context, var eventCallback : ((BtHIDService, Str
 
     // 서비스를 중지합니다
     @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
-    public fun dropService() {
+    fun dropService() {
         if (service.hidProxy != null) {
             service.hidProxy!!.unregisterApp()
             bluetoothAdapter.closeProfileProxy(BluetoothProfile.HID_DEVICE, service.hidProxy!!)
@@ -357,7 +360,7 @@ class BtHIDService(val context: Context, var eventCallback : ((BtHIDService, Str
 
     // 장치를 연결합니다
     @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
-    public fun connectTo(address: String) {
+    fun connectTo(address: String) {
         for (oldDevice in service.hidProxy!!.getDevicesMatchingConnectionStates(
             intArrayOf(
                 BluetoothProfile.STATE_CONNECTING,
@@ -376,7 +379,8 @@ class BtHIDService(val context: Context, var eventCallback : ((BtHIDService, Str
 
     // 이벤트를 전송합니다
     @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
-    public fun writeReport(content: ByteArray, inputId: Int) {
+    @Suppress("NOTHING_TO_INLINE")
+    inline fun writeReport(content: ByteArray, inputId: Int) {
         service.sendReport(
             content,
             inputId
@@ -384,7 +388,7 @@ class BtHIDService(val context: Context, var eventCallback : ((BtHIDService, Str
     }
 
     @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
-    public fun hasConnectedDevice(): Boolean {
+    fun hasConnectedDevice(): Boolean {
         return (service.hidProxy?.connectedDevices?.size ?: 0) > 0
     }
 

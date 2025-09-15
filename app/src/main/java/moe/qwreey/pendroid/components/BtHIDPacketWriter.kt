@@ -1,7 +1,6 @@
 package moe.qwreey.pendroid.components
 
 import android.Manifest
-import android.util.Log
 import androidx.annotation.RequiresPermission
 import moe.qwreey.pendroid.components.motionbox.FingerHandle
 import moe.qwreey.pendroid.components.motionbox.FingerHandle.Companion.TOUCH_MAX
@@ -9,17 +8,27 @@ import moe.qwreey.pendroid.components.motionbox.StylusHandle
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
-class PacketWriter(var btHidService: BtHIDService) {
+class BtHIDPacketWriter(var btHidService: BtHIDService) {
     // Stylus states
     // SEE: https://learn.microsoft.com/en-us/windows-hardware/design/component-guidelines/windows-pen-states
     private var eraserActivated: Boolean = false
     private var barrelActivated: Boolean = false
     private var lastButtonState: Boolean = false
     private var lastButtonStartTimestamp: Int = -1
-    private val barrelTimeout: Int = 540
+    private val barrelTimeout: Int = 800
 
     // Finger states
-    private var lastTouchs: Array<FingerHandle.Touch?> = arrayOfNulls(TOUCH_MAX)
+    private val lastTouchs: Array<FingerHandle.Touch?> = arrayOfNulls(TOUCH_MAX)
+
+    // Buffers
+    private val stylusBuffer = ByteBuffer.allocate(11).apply {
+        order(ByteOrder.LITTLE_ENDIAN)
+    }
+    private val stylusBufferArr = stylusBuffer.array()
+    private val touchBuffer = ByteBuffer.allocate(6).apply {
+        order(ByteOrder.LITTLE_ENDIAN)
+    }
+    private val touchBufferArr = touchBuffer.array()
 
     companion object {
         private val ID_STYLUS: Int = 1
@@ -27,26 +36,23 @@ class PacketWriter(var btHidService: BtHIDService) {
     }
 
     @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
-    public fun writeDropStylusState(data: StylusHandle, flags: Byte = 0) {
-        val buf = ByteBuffer.allocate(11)
-        buf.order(ByteOrder.LITTLE_ENDIAN)
+    @Suppress("NOTHING_TO_INLINE")
+    private inline fun writeDropStylusState(data: StylusHandle, flags: Byte = 0) {
+        stylusBuffer.clear()
 
-        buf.put(flags)
-        buf.putShort(data.pressure.toShort())
-        buf.putShort((data.tiltX * 100).toShort())
-        buf.putShort((data.tiltY * 100).toShort())
-        buf.putShort(data.x.toShort())
-        buf.putShort(data.y.toShort())
+        stylusBuffer.put(flags)
+        stylusBuffer.putShort(data.pressure.toShort())
+        stylusBuffer.putShort((data.tiltX * 100).toShort())
+        stylusBuffer.putShort((data.tiltY * 100).toShort())
+        stylusBuffer.putShort(data.x.toShort())
+        stylusBuffer.putShort(data.y.toShort())
 
-        btHidService.writeReport(buf.array(), ID_STYLUS)
+        btHidService.writeReport(stylusBufferArr, ID_STYLUS)
     }
 
     @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
-    public fun writeStylus(data: StylusHandle) {
+    fun writeStylus(data: StylusHandle) {
         dropAllTouchs()
-
-        val buf = ByteBuffer.allocate(11)
-        buf.order(ByteOrder.LITTLE_ENDIAN)
 
         // When barrel state updated
         if (!lastButtonState && data.button) {
@@ -72,6 +78,7 @@ class PacketWriter(var btHidService: BtHIDService) {
         }
         if (!data.button) {
             barrelActivated = false
+            lastButtonStartTimestamp = -1
         }
         if (data.down) {
             lastButtonStartTimestamp = -1
@@ -90,82 +97,83 @@ class PacketWriter(var btHidService: BtHIDService) {
             }
         }
 
+        stylusBuffer.clear()
+
         // Write tip / eraser / range state
-        buf.put( (
+        stylusBuffer.put( (
             (if (data.down) { 0b0000_0001 } else { 0 }) // (Tip Switch)
             or (if (eraserActivated) { 0b0000_0010 } else { 0 }) // (Eraser Switch)
-            or if (data.hover) { 0b0000_0100 } else { 0 } // (In Range, Hovering)
+            or (if (data.hover) { 0b0000_0100 } else { 0 }) // (In Range, Hovering)
             or (if (barrelActivated) { 0b0000_1000 } else { 0 }) // (Barrel Button, Button double tab)
         ).toByte() )
 
         // Write abs datas
-        buf.putShort(data.pressure.toShort())
-        buf.putShort((data.tiltX * 100).toShort())
-        buf.putShort((data.tiltY * 100).toShort())
-        buf.putShort(data.x.toShort())
-        buf.putShort(data.y.toShort())
+        stylusBuffer.putShort(data.pressure.toShort())
+        stylusBuffer.putShort((data.tiltX * 100).toShort())
+        stylusBuffer.putShort((data.tiltY * 100).toShort())
+        stylusBuffer.putShort(data.x.toShort())
+        stylusBuffer.putShort(data.y.toShort())
 
-        btHidService.writeReport(buf.array(), ID_STYLUS)
+        btHidService.writeReport(stylusBufferArr, ID_STYLUS)
     }
 
     @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
-    public fun dropAllTouchs() {
+    fun dropAllTouchs() {
         for ((slot, touch) in lastTouchs.withIndex()) {
             if (touch == null) continue
 
-            val buf = ByteBuffer.allocate(6)
-            buf.order(ByteOrder.LITTLE_ENDIAN)
+            touchBuffer.clear()
 
-            buf.put( (
+            touchBuffer.put( (
                 0
                 or (slot shl 2)
             ).toByte() )
-            buf.putShort(touch.x.toShort())
-            buf.putShort(touch.y.toShort())
-            buf.put(0.toByte())
+            touchBuffer.putShort(touch.x.toShort())
+            touchBuffer.putShort(touch.y.toShort())
+            touchBuffer.put(0.toByte())
 
             lastTouchs[slot] = null
 
-            btHidService.writeReport(buf.array(), ID_TOUCHPAD)
+            btHidService.writeReport(touchBufferArr, ID_TOUCHPAD)
         }
     }
 
     @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
     private fun writeTouch(touch: FingerHandle.Touch, len: Int) {
-        val buf = ByteBuffer.allocate(6)
-        buf.order(ByteOrder.LITTLE_ENDIAN)
+        touchBuffer.clear()
 
         // Tip and Slot
-        buf.put( (
+        touchBuffer.put( (
             1
             or (if (touch.x != -1) { 0b0010 } else { 0 })
             or (touch.slot shl 2)
         ).toByte() )
 
-        // If up, use last pos
+        // no diff
+        val old = lastTouchs[touch.slot]
+        if (touch.down && old != null && old.x == touch.x && old.y == touch.y) {
+            return;
+        }
+
+        // If no position, use last pos
         if (touch.x == -1) {
-            buf.putShort((lastTouchs[touch.slot]?.x ?: 0).toShort())
-            buf.putShort((lastTouchs[touch.slot]?.y ?: 0).toShort())
+            touchBuffer.putShort((old?.x ?: 0).toShort())
+            touchBuffer.putShort((old?.y ?: 0).toShort())
         } else {
-            // no diff
-            val old = lastTouchs[touch.slot]
-            if (old != null && old.x == touch.x && old.y == touch.y) {
-                return;
-            }
-            buf.putShort(touch.x.toShort())
-            buf.putShort(touch.y.toShort())
+            touchBuffer.putShort(touch.x.toShort())
+            touchBuffer.putShort(touch.y.toShort())
         }
 
         // update length
-        buf.put(len.toByte())
+        touchBuffer.put(len.toByte())
 
         lastTouchs[touch.slot] = touch
 
-        btHidService.writeReport(buf.array(), ID_TOUCHPAD)
+        btHidService.writeReport(touchBufferArr, ID_TOUCHPAD)
     }
 
     @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
-    public fun writeFinger(data: FingerHandle) {
+    fun writeFinger(data: FingerHandle) {
         for (index in 0 ..< data.len) {
             val touch = data.touchList[index]
             if (touch == null || touch.slot > 4) continue

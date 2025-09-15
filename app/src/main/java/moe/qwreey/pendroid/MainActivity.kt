@@ -29,7 +29,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
@@ -41,8 +40,10 @@ import moe.qwreey.pendroid.components.ConnectDialog
 import moe.qwreey.pendroid.components.DraggableButton
 import moe.qwreey.pendroid.components.FullscreenMode
 import moe.qwreey.pendroid.components.KeepScreenOn
-import moe.qwreey.pendroid.components.PacketWriter
+import moe.qwreey.pendroid.components.BtHIDPacketWriter
 import moe.qwreey.pendroid.components.PermissionGate
+import moe.qwreey.pendroid.components.WSPacketWriter
+import moe.qwreey.pendroid.components.WSService
 import moe.qwreey.pendroid.components.drawGridBehind
 import moe.qwreey.pendroid.components.motionbox.MotionBox
 import moe.qwreey.pendroid.ui.theme.PendroidTheme
@@ -92,7 +93,8 @@ fun MainView(modifier: Modifier = Modifier, activity: MainActivity? = null) {
             Log.i("moe.qwreey.pendroid", "isconn? ${service.hasConnectedDevice()}")
         }
     }) }
-    val packetWriter = remember { PacketWriter(hidService) }
+    val hidPacketWriter = remember { BtHIDPacketWriter(hidService) }
+    val wsPacketWriter = remember { WSPacketWriter(context, null) }
 
     // 네이티브 볼륨 처리 수행
     var volumeUpPressed by remember { mutableStateOf(0) }
@@ -115,6 +117,13 @@ fun MainView(modifier: Modifier = Modifier, activity: MainActivity? = null) {
     AppStateEffect(
         onAppForegrounded = {
             hidService.initService()
+            wsPacketWriter.wsService = WSService(23227, { conn ->
+                conn?.send(wsPacketWriter.getInit())
+            })
+            wsPacketWriter.wsService?.start()
+        },
+        onAppBackgrounded = {
+            wsPacketWriter.wsService?.stop()
         }
     )
 
@@ -164,14 +173,22 @@ fun MainView(modifier: Modifier = Modifier, activity: MainActivity? = null) {
                 gridColor = Color(24,24,24) // 격자 선 색상
             ),
         fingerCallback = { handle ->
-            packetWriter.writeFinger(handle)
+            if (wsPacketWriter.hasConnection()) {
+                wsPacketWriter.writeFinger(handle)
+            } else {
+                hidPacketWriter.writeFinger(handle)
+            }
         },
         stylusCallback = { handle ->
-            packetWriter.writeStylus(handle)
+            if (wsPacketWriter.hasConnection()) {
+                wsPacketWriter.writeStylus(handle)
+            } else {
+                hidPacketWriter.writeStylus(handle)
+            }
         },
-        content = { Box {
-            DraggableButton( onClick = { showBottomSheet = true } )
-        } }
+//        content = { Box {
+//            DraggableButton( onClick = { showBottomSheet = true } )
+//        } }
     )
 }
 

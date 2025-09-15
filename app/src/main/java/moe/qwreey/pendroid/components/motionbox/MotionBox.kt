@@ -35,7 +35,7 @@ fun MotionBox(
                 MotionDispatcherView(context).apply {
                     // 여기서 onDispatchTouchEvent 콜백을 설정해!
                     // 펜슬 라이브러리의 이벤트 처리 함수를 연결해 주는 거지.
-                    this.onDispatchTouchEvent = { motionEvent ->
+                    onDispatchTouchEvent = { motionEvent ->
                         when (motionEvent.getToolType(0)) {
                             MotionEvent.TOOL_TYPE_FINGER -> fingerHandle.touchEvent(motionEvent)
                             MotionEvent.TOOL_TYPE_STYLUS -> {
@@ -44,7 +44,7 @@ fun MotionBox(
                             }
                         }
                     }
-                    this.onDispatchGenericMotionEvent = { motionEvent ->
+                    onDispatchGenericMotionEvent = { motionEvent ->
                         if (motionEvent.getToolType(0) == MotionEvent.TOOL_TYPE_STYLUS) {
                             stylusHandle.hoverEvent(motionEvent)
                         }

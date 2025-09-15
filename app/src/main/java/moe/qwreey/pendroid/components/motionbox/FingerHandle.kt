@@ -33,10 +33,10 @@ class FingerHandle(var callback: (handle: FingerHandle) -> Unit = {}) {
         }
     }
 
-    class Touch(val x: Int, val y: Int, val slot: Int, val trackingId: Int) {
+    class Touch(val x: Int, val y: Int, val down: Boolean, val slot: Int, val trackingId: Int) {
         companion object {
-            fun uninit(slot: Int): Touch {
-                return Touch(-1, -1, slot, -1)
+            fun uninit(slot: Int, x: Int = -1, y: Int = -1): Touch {
+                return Touch(x, y, false, slot, -1)
             }
         }
     }
@@ -58,10 +58,12 @@ class FingerHandle(var callback: (handle: FingerHandle) -> Unit = {}) {
         private set
     var len: Int = 0
         private set
+    var totalDown: Int = 0;
     private var downTime: Long = -1;
 
     fun touchEvent(ev: MotionEvent) {
         len = 0
+        totalDown = 0
         if (downTime < 0 && -downTime == ev.downTime) {
             return
         } else if (downTime != ev.downTime) {
@@ -71,10 +73,14 @@ class FingerHandle(var callback: (handle: FingerHandle) -> Unit = {}) {
             val slot = ev.getPointerId(index)
             if (slot >= TOUCH_MAX) continue
 
+            val x = ev.getX(index).toInt()
+            val y = ev.getY(index).toInt()
+
             if (isDown(ev, index)) {
-                touchList[len++] = Touch(ev.getX(index).toInt(), ev.getY(index).toInt(), slot, trackingIds.slotTrackingId(slot))
+                totalDown++
+                touchList[len++] = Touch(x, y, true, slot, trackingIds.slotTrackingId(slot))
             } else if (trackingIds.clearSlot(slot)) {
-                touchList[len++] = Touch.uninit(slot)
+                touchList[len++] = Touch.uninit(slot, x, y)
             }
         }
         if (len != 0) callback.invoke(this)
@@ -82,6 +88,7 @@ class FingerHandle(var callback: (handle: FingerHandle) -> Unit = {}) {
 
     fun reset() {
         len = 0
+        totalDown = 0
         if (trackingIds.length() == 0) return
         for (slot in 0..<TOUCH_MAX) {
             if (trackingIds.clearSlot(slot)) touchList[len++] = Touch.uninit(slot)
