@@ -35,8 +35,20 @@ class FingerHandle(var callback: (handle: FingerHandle) -> Unit = {}) {
 
     class Touch(val x: Int, val y: Int, val down: Boolean, val slot: Int, val trackingId: Int) {
         companion object {
-            fun uninit(slot: Int, x: Int = -1, y: Int = -1): Touch {
+            @Suppress("NOTHING_TO_INLINE")
+            inline fun uninit(slot: Int, x: Int = -1, y: Int = -1): Touch {
                 return Touch(x, y, false, slot, -1)
+            }
+            @Suppress("NOTHING_TO_INLINE")
+            inline fun checkNotChanged(old: Touch?, touch: Touch): Boolean {
+                return (
+                    touch.down
+                    && old != null
+                    && old.down
+                    && old.trackingId == touch.trackingId
+                    && old.x == touch.x
+                    && old.y == touch.y
+                )
             }
         }
     }
@@ -44,7 +56,8 @@ class FingerHandle(var callback: (handle: FingerHandle) -> Unit = {}) {
     companion object {
         const val TOUCH_MAX: Int = 4
 
-        fun isDown(ev: MotionEvent, index: Int): Boolean {
+        @Suppress("NOTHING_TO_INLINE")
+        inline fun isDown(ev: MotionEvent, index: Int): Boolean {
             return if (ev.action == MotionEvent.ACTION_UP) {
                 false
             } else if (ev.actionIndex == index) {

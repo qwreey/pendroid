@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.DisplayMetrics
 import android.view.WindowManager
 import moe.qwreey.pendroid.components.motionbox.FingerHandle
+import moe.qwreey.pendroid.components.motionbox.FingerHandle.Companion.TOUCH_MAX
 import moe.qwreey.pendroid.components.motionbox.StylusHandle
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
@@ -26,6 +27,8 @@ class WSPacketWriter(val context: Context, var wsService: WSService?) {
     }
     private val touchArray = touchBuffer.array()
 
+    private val lastTouches: Array<FingerHandle.Touch?> = arrayOfNulls(TOUCH_MAX)
+
     fun hasConnection(): Boolean {
         return wsService?.hasConnection ?: false
     }
@@ -41,6 +44,8 @@ class WSPacketWriter(val context: Context, var wsService: WSService?) {
     }
 
     fun writeStylus(data: StylusHandle) {
+        dropAllTouches()
+
         stylusBuffer.clear()
         stylusBuffer.put(0x1)
 
@@ -64,6 +69,11 @@ class WSPacketWriter(val context: Context, var wsService: WSService?) {
     private fun writeTouch(touch: FingerHandle.Touch, len: Int) {
         touchBuffer.clear()
 
+        val old = lastTouches[touch.slot]
+        if (FingerHandle.Touch.checkNotChanged(old, touch)) {
+            return
+        }
+
         touchBuffer.put(0x2)
         touchBuffer.put(touch.slot.toByte())
         touchBuffer.put(if (touch.down) 1 else 0)
@@ -72,7 +82,29 @@ class WSPacketWriter(val context: Context, var wsService: WSService?) {
         touchBuffer.putShort(touch.x.toShort())
         touchBuffer.putShort(touch.y.toShort())
 
+        lastTouches[touch.slot] = touch
+
         wsService?.broadcast(touchArray)
+    }
+
+    fun dropAllTouches() {
+        for ((slot, touch) in lastTouches.withIndex()) {
+            if (touch == null || !touch.down) continue
+
+            touchBuffer.clear()
+
+            touchBuffer.put(0x2)
+            touchBuffer.put(slot.toByte())
+            touchBuffer.put(0)
+            touchBuffer.put(0)
+            touchBuffer.putInt(-1)
+            touchBuffer.putShort(touch.x.toShort())
+            touchBuffer.putShort(touch.y.toShort())
+
+            lastTouches[slot] = null
+
+            wsService?.broadcast(touchArray)
+        }
     }
 
     fun writeFinger(data: FingerHandle) {

@@ -18,7 +18,7 @@ class BtHIDPacketWriter(var btHidService: BtHIDService) {
     private val barrelTimeout: Int = 800
 
     // Finger states
-    private val lastTouchs: Array<FingerHandle.Touch?> = arrayOfNulls(TOUCH_MAX)
+    private val lastTouches: Array<FingerHandle.Touch?> = arrayOfNulls(TOUCH_MAX)
 
     // Buffers
     private val stylusBuffer = ByteBuffer.allocate(11).apply {
@@ -52,7 +52,7 @@ class BtHIDPacketWriter(var btHidService: BtHIDService) {
 
     @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
     fun writeStylus(data: StylusHandle) {
-        dropAllTouchs()
+        dropAllTouches()
 
         // When barrel state updated
         if (!lastButtonState && data.button) {
@@ -118,9 +118,9 @@ class BtHIDPacketWriter(var btHidService: BtHIDService) {
     }
 
     @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
-    fun dropAllTouchs() {
-        for ((slot, touch) in lastTouchs.withIndex()) {
-            if (touch == null) continue
+    fun dropAllTouches() {
+        for ((slot, touch) in lastTouches.withIndex()) {
+            if (touch == null || !touch.down) continue
 
             touchBuffer.clear()
 
@@ -132,7 +132,7 @@ class BtHIDPacketWriter(var btHidService: BtHIDService) {
             touchBuffer.putShort(touch.y.toShort())
             touchBuffer.put(0.toByte())
 
-            lastTouchs[slot] = null
+            lastTouches[slot] = null
 
             btHidService.writeReport(touchBufferArr, ID_TOUCHPAD)
         }
@@ -145,14 +145,14 @@ class BtHIDPacketWriter(var btHidService: BtHIDService) {
         // Tip and Slot
         touchBuffer.put( (
             1
-            or (if (touch.x != -1) { 0b0010 } else { 0 })
+            or (if (touch.down) { 0b0010 } else { 0 })
             or (touch.slot shl 2)
         ).toByte() )
 
         // no diff
-        val old = lastTouchs[touch.slot]
-        if (touch.down && old != null && old.x == touch.x && old.y == touch.y) {
-            return;
+        val old = lastTouches[touch.slot]
+        if (FingerHandle.Touch.checkNotChanged(old, touch)) {
+            return
         }
 
         // If no position, use last pos
@@ -167,7 +167,7 @@ class BtHIDPacketWriter(var btHidService: BtHIDService) {
         // update length
         touchBuffer.put(len.toByte())
 
-        lastTouchs[touch.slot] = touch
+        lastTouches[touch.slot] = touch
 
         btHidService.writeReport(touchBufferArr, ID_TOUCHPAD)
     }
