@@ -76,7 +76,7 @@ class BtHIDPacketWriter(var btHidService: BtHIDService) {
             lastButtonStartTimestamp = -1
             lastButtonState = false
         }
-        if (!data.button) {
+        if (!data.button && barrelActivated) {
             barrelActivated = false
             lastButtonStartTimestamp = -1
         }
@@ -118,7 +118,8 @@ class BtHIDPacketWriter(var btHidService: BtHIDService) {
     }
 
     @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
-    fun dropAllTouches() {
+    @Suppress("NOTHING_TO_INLINE")
+    private inline fun dropAllTouches() {
         for ((slot, touch) in lastTouches.withIndex()) {
             if (touch == null || !touch.down) continue
 
@@ -139,7 +140,8 @@ class BtHIDPacketWriter(var btHidService: BtHIDService) {
     }
 
     @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
-    private fun writeTouch(touch: FingerHandle.Touch, len: Int) {
+    @Suppress("NOTHING_TO_INLINE")
+    private inline fun writeTouch(touch: FingerHandle.Touch, len: Int) {
         touchBuffer.clear()
 
         // Tip and Slot

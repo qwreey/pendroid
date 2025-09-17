@@ -120,6 +120,8 @@ fun MainView(modifier: Modifier = Modifier, activity: MainActivity? = null) {
             wsPacketWriter.wsService = WSService(23227, { conn ->
                 conn?.send(wsPacketWriter.getInit())
             })
+            wsPacketWriter.wsService?.isTcpNoDelay = true
+            wsPacketWriter.wsService?.isReuseAddr = true
             wsPacketWriter.wsService?.start()
         },
         onAppBackgrounded = {

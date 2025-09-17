@@ -66,7 +66,8 @@ class WSPacketWriter(val context: Context, var wsService: WSService?) {
         wsService?.broadcast(stylusArray)
     }
 
-    private fun writeTouch(touch: FingerHandle.Touch, len: Int) {
+    @Suppress("NOTHING_TO_INLINE")
+    private inline fun writeTouch(touch: FingerHandle.Touch, len: Int) {
         touchBuffer.clear()
 
         val old = lastTouches[touch.slot]
@@ -87,7 +88,8 @@ class WSPacketWriter(val context: Context, var wsService: WSService?) {
         wsService?.broadcast(touchArray)
     }
 
-    fun dropAllTouches() {
+    @Suppress("NOTHING_TO_INLINE")
+    private inline fun dropAllTouches() {
         for ((slot, touch) in lastTouches.withIndex()) {
             if (touch == null || !touch.down) continue
 
