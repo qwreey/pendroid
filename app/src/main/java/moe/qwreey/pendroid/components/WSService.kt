@@ -6,7 +6,11 @@ import org.java_websocket.server.WebSocketServer
 import java.lang.Exception
 import java.net.InetSocketAddress
 
-class WSService(val socketPort: Int, var openHandle: (WebSocket?) -> Unit = {}): WebSocketServer(InetSocketAddress(socketPort)) {
+class WSService(
+    val socketPort: Int,
+    var openHandle: (WebSocket?) -> Unit = {},
+    var closeHandle: (WebSocket?, code: Int, reason: String?) -> Unit = { conn, code, reason -> }
+): WebSocketServer(InetSocketAddress(socketPort)) {
     var hasConnection: Boolean = false
         private set
 
@@ -25,6 +29,7 @@ class WSService(val socketPort: Int, var openHandle: (WebSocket?) -> Unit = {}):
         remote: Boolean
     ) {
         hasConnection = connections.size != 0
+        closeHandle(conn, code, reason)
     }
 
     override fun onMessage(conn: WebSocket?, message: String?) {

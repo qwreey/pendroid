@@ -2,13 +2,11 @@ package moe.qwreey.pendroid
 
 import android.annotation.SuppressLint
 import android.os.Bundle
-import android.util.Log
 import android.view.KeyEvent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -37,7 +35,6 @@ import kotlinx.coroutines.launch
 import moe.qwreey.pendroid.components.AppStateEffect
 import moe.qwreey.pendroid.components.BtHIDService
 import moe.qwreey.pendroid.components.ConnectDialog
-import moe.qwreey.pendroid.components.DraggableButton
 import moe.qwreey.pendroid.components.FullscreenMode
 import moe.qwreey.pendroid.components.KeepScreenOn
 import moe.qwreey.pendroid.components.BtHIDPacketWriter
@@ -56,7 +53,6 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             FullscreenMode()
-            KeepScreenOn()
             PendroidTheme {
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
                     PermissionGate {
@@ -86,13 +82,18 @@ fun MainView(modifier: Modifier = Modifier, activity: MainActivity? = null) {
     val scope = rememberCoroutineScope()
     var showBottomSheet by remember { mutableStateOf(false) }
     var showConnectionDialog by remember { mutableStateOf(false) }
+    var hidConnected by remember { mutableStateOf(false) }
+    var wsConnected by remember { mutableStateOf(false) }
 
     // 서비스 핸들링
-    val hidService = remember { BtHIDService(context, { service, eventName, value ->
-        if (eventName == "onConnectionStateChanged") {
-            Log.i("moe.qwreey.pendroid", "isconn? ${service.hasConnectedDevice()}")
-        }
-    }) }
+    val hidService = remember { BtHIDService(context,
+        handleDisconnectedAll = {
+            hidConnected = false
+        },
+        handleConnected = {
+            hidConnected = true
+        },
+    ) }
     val hidPacketWriter = remember { BtHIDPacketWriter(hidService) }
     val wsPacketWriter = remember { WSPacketWriter(context, null) }
 
@@ -117,12 +118,18 @@ fun MainView(modifier: Modifier = Modifier, activity: MainActivity? = null) {
     AppStateEffect(
         onAppForegrounded = {
             hidService.initService()
-            wsPacketWriter.wsService = WSService(23227, { conn ->
-                conn?.send(wsPacketWriter.getInit())
-            })
-            wsPacketWriter.wsService?.isTcpNoDelay = true
-            wsPacketWriter.wsService?.isReuseAddr = true
-            wsPacketWriter.wsService?.start()
+            wsPacketWriter.wsService = WSService(23227).apply {
+                isTcpNoDelay = true
+                isReuseAddr = true
+                openHandle = { conn ->
+                    conn?.send(wsPacketWriter.getInit())
+                    wsConnected = true
+                }
+                closeHandle = { conn, code, reason ->
+                    wsConnected = false
+                }
+                start()
+            }
         },
         onAppBackgrounded = {
             wsPacketWriter.wsService?.stop()
@@ -134,12 +141,26 @@ fun MainView(modifier: Modifier = Modifier, activity: MainActivity? = null) {
             showBottomSheet = !showBottomSheet
         }
     }
+    LaunchedEffect(key1 = volumeDownPressed) {
+        if (volumeDownPressed > 0) {
+            showConnectionDialog = !showConnectionDialog
+        }
+    }
 
-
+    if (wsConnected || hidConnected) {
+        KeepScreenOn()
+    }
 
     if (showConnectionDialog) {
-        ConnectDialog(listOf( "www", "aaa" ))
+        ConnectDialog(
+            devices = hidService.listDevices(),
+            onDeviceSelected = { address ->
+                hidService.connectTo(address)
+                showConnectionDialog = false
+            }
+        )
     }
+    
     if (showBottomSheet) {
         ModalBottomSheet(
             onDismissRequest = {
@@ -150,7 +171,7 @@ fun MainView(modifier: Modifier = Modifier, activity: MainActivity? = null) {
         ) {
             // 4. 여기에 설정 화면 내용을 채우면 돼!
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("설정창이야~")
+                Text("설정창")
                 Spacer(modifier = Modifier.height(20.dp))
                 Button(onClick = {
                     // 닫기 버튼을 누르면 스르륵 닫히게~

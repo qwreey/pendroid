@@ -1,5 +1,6 @@
 package moe.qwreey.pendroid.components
 
+import android.bluetooth.BluetoothDevice
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -21,45 +22,45 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 
+@androidx.annotation.RequiresPermission(android.Manifest.permission.BLUETOOTH_CONNECT)
 @Composable
 fun ConnectDialog(
-    devices: List<String>,
+    devices: List<BluetoothDevice>,
     onDeviceSelected: (String) -> Unit = {},
     onDismissRequest: () -> Unit = {}
 ) {
-    // 1. 어떤 기기를 선택했는지 기억하는 저장소!
     var selectedDevice by remember { mutableStateOf<String?>(null) }
 
     AlertDialog(
         onDismissRequest = onDismissRequest,
         title = { Text("연결할 기기 선택") },
-        // 2. 본문 내용에 기기 목록을 넣어줄 거야.
         text = {
             LazyColumn {
                 items(devices) { device ->
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable { selectedDevice = device } // 줄을 누르면 선택!
+                            .clickable { selectedDevice = device.address }
                             .padding(vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         RadioButton(
-                            selected = (device == selectedDevice),
-                            onClick = { selectedDevice = device }
+                            selected = (device.address == selectedDevice),
+                            onClick = { selectedDevice = device.address }
                         )
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text(device)
+                        Text(device.name)
                     }
                 }
             }
         },
+
         // 3. 확인, 취소 버튼들
         confirmButton = {
             TextButton(
                 onClick = {
-                    selectedDevice?.let { onDeviceSelected(it) } // 선택한 기기를 알려주고
-                    onDismissRequest() // 다이얼로그 닫기
+                    selectedDevice?.let { onDeviceSelected(it) }
+                    onDismissRequest()
                 },
                 // 4. 기기를 선택해야만 '연결' 버튼이 활성화!
                 enabled = selectedDevice != null

@@ -17,7 +17,17 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.util.concurrent.Executors
 
-class BtHIDService(val context: Context, var eventCallback : ((BtHIDService, String, String?) -> Unit)? = null) {
+class BtHIDService(
+    val context: Context,
+
+    var handleDisconnectedAll: () -> Unit = {},
+    var handleConnected: (BluetoothDevice) -> Unit = {},
+    var handleConnectionStateChanged: (BluetoothDevice, Int) -> Unit = { device, state -> },
+    var handleAppRegistered: () -> Unit = {},
+    var handleAppUnregistered: () -> Unit = {},
+    var handleServiceDestroyed: () -> Unit = {},
+    var handleServiceReady: () -> Unit = {},
+) {
     private val TAG = "BtHIDService"
     private val bluetoothManager: BluetoothManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
     private val bluetoothAdapter: BluetoothAdapter = bluetoothManager.adapter
@@ -273,12 +283,18 @@ class BtHIDService(val context: Context, var eventCallback : ((BtHIDService, Str
         }
 
         // HID 장치 연결 상태 변경 핸들
+        @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
         override fun onConnectionStateChanged(
             device: BluetoothDevice,
             state: Int
         ) {
             super.onConnectionStateChanged(device, state)
-            invokeCallback("onConnectionStateChanged")
+            if (state == BluetoothHidDevice.STATE_DISCONNECTED && hidProxy?.connectedDevices?.size == 0) {
+                handleDisconnectedAll()
+            } else if (state == BluetoothHidDevice.STATE_CONNECTED) {
+                handleConnected(device)
+            }
+            handleConnectionStateChanged(device, state)
             Log.i(
                 TAG,
                 "onConnectionStateChanged: device=$device state=$state"
@@ -309,9 +325,9 @@ class BtHIDService(val context: Context, var eventCallback : ((BtHIDService, Str
             this.registered = registered
             if (registered) {
                 reconnectOldDevice()
-                invokeCallback("onAppRegistered")
+                handleAppRegistered()
             } else {
-                invokeCallback("onAppUnregistered")
+                handleAppUnregistered()
             }
         }
 
@@ -322,7 +338,8 @@ class BtHIDService(val context: Context, var eventCallback : ((BtHIDService, Str
                 Log.d(TAG, "onServiceConnected: Got HID device")
                 hidProxy = proxy as BluetoothHidDevice
                 registerApp()
-                invokeCallback("onServiceReady")
+
+                handleServiceReady()
             }
         }
 
@@ -333,7 +350,7 @@ class BtHIDService(val context: Context, var eventCallback : ((BtHIDService, Str
                 hidProxy = null
             }
 
-            invokeCallback("onServiceDestroyed")
+            handleServiceDestroyed()
         }
     }
 
@@ -360,7 +377,7 @@ class BtHIDService(val context: Context, var eventCallback : ((BtHIDService, Str
 
     // 장치를 연결합니다
     @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
-    fun connectTo(address: String) {
+    fun connectTo(device: BluetoothDevice) {
         for (oldDevice in service.hidProxy!!.getDevicesMatchingConnectionStates(
             intArrayOf(
                 BluetoothProfile.STATE_CONNECTING,
@@ -370,10 +387,14 @@ class BtHIDService(val context: Context, var eventCallback : ((BtHIDService, Str
             service.hidProxy!!.disconnect(oldDevice)
         }
 
+        service.hidProxy!!.connect(device);
+    }
+    @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
+    fun connectTo(address: String) {
         val device = bluetoothAdapter.getRemoteDevice(address)
 
         if (device != null) {
-            service.hidProxy!!.connect(device);
+            connectTo(device)
         }
     }
 
@@ -392,7 +413,8 @@ class BtHIDService(val context: Context, var eventCallback : ((BtHIDService, Str
         return (service.hidProxy?.connectedDevices?.size ?: 0) > 0
     }
 
-    private fun invokeCallback(name: String, value: String? = null) {
-        eventCallback?.invoke(this, name, value)
+    @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
+    fun listDevices(): List<BluetoothDevice> {
+        return bluetoothAdapter.bondedDevices.toList()
     }
 }
