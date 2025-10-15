@@ -95,7 +95,7 @@ class StylusHandle(var callback: (handle: StylusHandle) -> Unit = {}) {
     @Suppress("NOTHING_TO_INLINE")
     private inline fun processMotionEvent(ev: MotionEvent, hover: Boolean) {
         // Update down state
-        down = when (ev.action) {
+        down = hover && when (ev.action) {
             MotionEvent.ACTION_DOWN, ACTION_ERASER_DOWN -> true
             MotionEvent.ACTION_UP, ACTION_ERASER_UP -> false
             else -> down
